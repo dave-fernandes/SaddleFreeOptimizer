@@ -6,7 +6,7 @@ The algorithm is described by [Dauphin, _et al_. \(2014\)](https://arxiv.org/abs
 * The order of operations in the Lanczos method follows that recommended by [Paige \(1972\)](https://academic.oup.com/imamat/article-abstract/10/3/373/824284).
 * The type of damping applied to the curvature matrix in the Krylov subspace has 3 options that can be specified in the optimizer's constructor.
 * Instead of applying multiple damping coefficients and finding the result with the lowest loss, this implementation uses a Marquardt-style heuristic to update the damping coefficient as per [Martens \(2010\)](http://www.cs.toronto.edu/~jmartens/docs/Deep_HessianFree.pdf).
-* If you choose a Krylov dimension that is larger than the number of parameters in the model, then the algorithm will not perform the Lanczos method; it will essentially become a Levenberg-Marquardt method with multiple options for damping. Obviously, this can only be done with very small models such as the XOR test.
+* If you choose a Krylov dimension that is larger than the number of parameters in the model, then the algorithm will not perform the Lanczos method; it will essentially become a Levenberg-Marquardt method with multiple options for damping and a custom loss function. Obviously, this can only be done with very small models such as the XOR_Test example.
 
 ## Files
 * `SFOptimizer.py` is the optimizer class.
@@ -15,5 +15,5 @@ The algorithm is described by [Dauphin, _et al_. \(2014\)](https://arxiv.org/abs
 * `AE_Test.ipynb` is a Jupyter notebook containing a deep autoencoder network trained with MNIST data.
 
 ## Implementation Notes
-* The Lanczos iteration loop is unrolled into branches of the TensorFlow graph. This allows a full step to be taken in one TF operation. However, it means the graph can get large if you use a high Krylov dimension.
+* The Lanczos iteration loop is unrolled into branches in the TensorFlow graph. This allows a full step to be taken in one TF operation. However, it means the graph can get large if you use a high Krylov dimension.
 * As in the original paper, no re-orthogonalization is used for the Lanczos vectors. This means that they will likely become linearly dependent if the Krylov dimension is high \(> 100?\). There would, thus, be little benefit in attempting this.

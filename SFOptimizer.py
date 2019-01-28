@@ -18,23 +18,34 @@
 from enum import Enum
 import tensorflow as tf
 
+
+"""
+	Damping options for SFOptimizer
+"""
 class SFDamping(Enum):
-	tihkonov = 1
-	marquardt = 2
-	curvature = 3
+	tikhonov = 1	# Add damping coefficient to diagonal elements of curvature matrix
+	marquardt = 2	# Multiply diagonal elements of curvature matrix by (1 + damping coefficient)
+	curvature = 3	# Multiply curvature matrix by (1 + damping coefficient)
+
 
 """
 	Saddle-Free optimizer for Tensorflow
-	See: Dauphin et al. (2014)
+	See: https://arxiv.org/abs/1406.2572
 	
 	Methods to use:
 		__init__: Initialize variables.
 			Construct this class before running global_variables_initializer.
-		
-		minimize: Create graph for computing updates
+			
+		reset_lambda: Create op to reset lambda_damp to its initial value
 			Create this op after running global_variables_initializer.
 		
-		update: Create graph for update of variables
+		minimize: Create op for doing Lanczos iterations and computing updates
+			Create this op after running global_variables_initializer.
+		
+		fixed_subspace_step: Create op for computing updates within existing Krylov subspace
+			Create this op after running global_variables_initializer.
+		
+		update: Create op for update of variables
 			Create this op after running global_variables_initializer.
 			
 		Run the minimize and update ops in separate calls to Session.run in your
@@ -48,12 +59,14 @@ class SFOptimizer(object):
 				List of second-order differentiable variables to optimize
 			krylov_dimension: int
 				Subspace dimension for Newton step computation
+			damping_type: SFDamping
+				Style of damping for trust region (see description for SFDamping Enum)
 			initial_damping: float
 				Initial value for Levenberg-Marquardt damping coefficient
 			dtype: Tensorflow type
 				Type of Tensorflow variables
 	"""
-	def __init__(self, var_list, krylov_dimension=20, damping_type=SFDamping.tihkonov, initial_damping=0.01, dtype=tf.float32):
+	def __init__(self, var_list, krylov_dimension=20, damping_type=SFDamping.tikhonov, initial_damping=0.01, dtype=tf.float32):
 		assert(krylov_dimension > 3)
 		self.krylov_dim = krylov_dimension
 		self.damping_type = damping_type
@@ -287,7 +300,7 @@ class SFOptimizer(object):
 				# Add damping term to diagonal
 				lambda_damp = self.lambda_damp.read_value()
 				
-				if self.damping_type == SFDamping.tihkonov:
+				if self.damping_type == SFDamping.tikhonov:
 					h_adj = h_abs + tf.multiply(lambda_damp, tf.eye(tf.size(v), dtype=self.dtype))
 				elif self.damping_type == SFDamping.marquardt:
 					h_adj = h_abs + tf.multiply(lambda_damp, tf.linalg.diag(tf.linalg.diag_part(h_abs)))
@@ -391,11 +404,12 @@ class SFOptimizer(object):
 		Multiply the Hessian of the loss function wrt training variables by `v`.
 	"""
 	def hessian_vector_product(self, v):
+		# Gradient-vector product
 		elemwise_products = [
 			tf.multiply(grad_elem, tf.stop_gradient(v_elem))
 			for grad_elem, v_elem in zip(self.gradients, v)
 			if grad_elem is not None
 		]
 		
-		# Second backprop
+		# Gradient of the GVP
 		return tf.gradients(elemwise_products, self.var_list)
