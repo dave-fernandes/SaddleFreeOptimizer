@@ -93,7 +93,7 @@ class SFOptimizer(object):
 		# Variables
 		with tf.name_scope('SFOptimizer'):
 			# Damping coefficient
-			self.lambda_damp = tf.get_variable("lambda_damp", initializer=tf.constant(initial_damping, dtype=dtype), trainable=False, dtype=tf.float64, use_resource=True)
+			self.lambda_damp = tf.get_variable("lambda_damp", initializer=tf.constant(initial_damping, dtype=dtype), trainable=False, use_resource=True)
 			
 			# Loss computed before updating training variables
 			self.saved_loss = tf.get_variable("saved_loss", shape=(), initializer=tf.zeros_initializer(), trainable=False, dtype=dtype, use_resource=True)
