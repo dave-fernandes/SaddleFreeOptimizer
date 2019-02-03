@@ -161,22 +161,17 @@ class SFOptimizer(object):
 		gradient_vec = self.var_to_column(self.gradients)
 		v_i = tf.math.l2_normalize(gradient_vec)
 		
+		# Lanczos method follows Paige (1972; variant [2, 7])
+		var = self.column_to_var(v_i)
+		hv_list = self.hessian_vector_product(var)
+		u = self.var_to_column(hv_list)
+		
 		# Matrix to transform to/from Krylov subspace is concatenation of v_i's
 		v = tf.identity(v_i, name="v_transform")
 		
 		for i in range(self.krylov_dim):
 			with tf.control_dependencies([v_i]):
-				# Generate subsequent Lanczos vectors by taking products with Hessian
-				#if i < self.krylov_dim - 1:
-				if True:
-					var = self.column_to_var(v_i)
-					hv_list = self.hessian_vector_product(var)
-					w = self.var_to_column(hv_list)
-				else:
-					# Last vector is the previous search vector
-					w = self.w_prev
-					
-				alpha = tf.matmul(w, v_i, transpose_a=True)
+				alpha = tf.matmul(v_i, u, transpose_a=True)
 				
 				# For the last pass, we only need to append the last row to the transformed Hessian
 				if i == self.krylov_dim - 1:
@@ -185,16 +180,19 @@ class SFOptimizer(object):
 					w_assign_op = tf.assign(self.w_prev, v_i)
 					break
 				
-				# Orthogonalize new vector (assuming perfect accuracy)
-				if i == 0:
-					w = w - alpha * v_i
-				else:
-					w = w - alpha * v_i - beta_prev * tf.slice(v, [0, i - 1], [-1, 1])
+				w = u - alpha * v_i
+				beta = tf.reshape(tf.norm(w), [1, 1])
 				
-				# TODO: Selectively reorthogonalize new vector to remove numerical drift
+				# TODO: Selectively reorthogonalize w to remove numerical drift
 				# See: Parlett & Scott (1979)
 				
-				beta = tf.reshape(tf.norm(w), [1, 1])
+				# Compute next v_i and concatenate onto v
+				v_i = w / beta
+				v = tf.concat([v, v_i], axis=1)
+				
+				var = self.column_to_var(v_i)
+				hv_list = self.hessian_vector_product(var)
+				u = self.var_to_column(hv_list) - beta * tf.slice(v, [0, i], [-1, 1])
 				
 				# Concatenate a new row to the transformed Hessian
 				if i == 0:
@@ -211,9 +209,6 @@ class SFOptimizer(object):
 					h_row = tf.concat(elements, axis=1)
 					h_tridiag = tf.concat([h_tridiag, h_row], axis=0)
 				
-				# Compute next v_i and concatenate onto v
-				v_i = w / beta
-				v = tf.concat([v, v_i], axis=1)
 				beta_prev = beta
 		
 		# Transform gradient and parameters to Krylov subspace
@@ -278,6 +273,7 @@ class SFOptimizer(object):
 		
 		dvar_list = []
 		q_loss_ops = []
+		self.h_eigenvalues = None
 		
 		# For each gradient and Hessian in list, perform a step of Newton's method
 		with tf.control_dependencies([init_op]):
