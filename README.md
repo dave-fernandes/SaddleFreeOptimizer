@@ -17,3 +17,4 @@ The algorithm is described by [Dauphin, _et al_. \(2014\)](https://arxiv.org/abs
 ## Implementation Notes
 * The Lanczos iteration loop is unrolled into branches in the TensorFlow graph. This allows a full step to be taken in one TF operation. However, it means the graph can get large if you use a high Krylov dimension.
 * As in the original paper, no re-orthogonalization is used for the Lanczos vectors. This means that they will likely become linearly dependent if the Krylov dimension is high \(> 100?\). There would, thus, be little benefit in attempting this.
+* Tested with Python 3.6.7 and TensorFlow 1.12.0
